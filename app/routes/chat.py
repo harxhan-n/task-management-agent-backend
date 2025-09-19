@@ -133,7 +133,7 @@ async def websocket_chat_endpoint(websocket: WebSocket):
         await websocket.send_text(json.dumps({
             "type": "connection",
             "data": {
-                "message": "Connected to Task Management Assistant! 🎉",
+                "message": "Flux is at your service! 🤖✨ Ready to streamline your tasks?",
                 "session_id": session_id,
                 "features": ["Context-aware conversation", "Task management", "Real-time updates"]
             }
