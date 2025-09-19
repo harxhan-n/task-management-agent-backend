@@ -50,7 +50,7 @@ class ConnectionManager:
 
     async def broadcast_to_chat(self, message: dict):
         disconnected = set()
-        for connection in self.chat_connections:
+        for session_id, connection in self.chat_connections.items():
             try:
                 await connection.send_text(json.dumps(message))
             except:
@@ -218,6 +218,41 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
             "type": "connection",
             "data": {"message": "Connected to task updates"}
         }))
+        
+        # Send initial tasks
+        try:
+            from .. import crud
+            from ..db import AsyncSessionLocal
+            
+            async with AsyncSessionLocal() as db:
+                all_tasks = await crud.get_tasks(db, limit=100)
+                tasks_data = []
+                for task in all_tasks:
+                    tasks_data.append({
+                        "id": task.id,
+                        "title": task.title,
+                        "description": task.description,
+                        "status": task.status,
+                        "priority": task.priority,
+                        "due_date": task.due_date.isoformat() if task.due_date else None,
+                        "created_at": task.created_at.isoformat() if task.created_at else None,
+                        "updated_at": task.updated_at.isoformat() if task.updated_at else None
+                    })
+                
+                # Send initial tasks to this connection
+                initial_message = {
+                    "type": "task_update",
+                    "data": {"tasks": tasks_data}
+                }
+                await websocket.send_text(json.dumps(initial_message))
+                
+        except Exception as e:
+            print(f"Error sending initial tasks: {e}")
+            # Send empty array if there's an error
+            await websocket.send_text(json.dumps({
+                "type": "task_update",
+                "data": {"tasks": []}
+            }))
         
         # Keep connection alive
         while True:
