@@ -57,6 +57,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"Incoming request: {request.method} {request.url}")
+    response = await call_next(request)
+    print(f"Response status: {response.status_code}")
+    return response
+
 # Include routers
 try:
     app.include_router(tasks.router, prefix="/api")
