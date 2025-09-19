@@ -14,12 +14,19 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
-    await init_db()
-    print("Database initialized")
+    try:
+        await init_db()
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Warning: Database connection failed: {e}")
+        print("Application will start but database features may not work")
     yield
     # Shutdown
-    await close_db()
-    print("Database connections closed")
+    try:
+        await close_db()
+        print("Database connections closed")
+    except Exception as e:
+        print(f"Warning during database cleanup: {e}")
 
 
 # Create FastAPI app
