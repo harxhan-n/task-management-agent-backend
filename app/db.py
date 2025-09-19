@@ -21,29 +21,57 @@ else:
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
         print("Fixed DATABASE_URL to use asyncpg driver")
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Reduce logging in production
-    future=True,
-    pool_pre_ping=True,  # Verify connections before use
-    pool_recycle=300,    # Recycle connections every 5 minutes
-)
+print(f"Final DATABASE_URL: {DATABASE_URL[:50]}...")
+
+# Create async engine with better error handling
+try:
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,  # Reduce logging in production
+        future=True,
+        pool_pre_ping=True,  # Verify connections before use
+        pool_recycle=300,    # Recycle connections every 5 minutes
+        connect_args={
+            "server_settings": {
+                "application_name": "railway_taskmanager",
+            }
+        }
+    )
+    print("Database engine created successfully")
+except Exception as e:
+    print(f"Error creating database engine: {e}")
+    # Create a dummy engine to prevent import errors
+    engine = None
 
 # Create async session factory
-AsyncSessionLocal = sessionmaker(
-    engine, 
-    class_=AsyncSession, 
-    expire_on_commit=False
-)
+if engine:
+    AsyncSessionLocal = sessionmaker(
+        engine, 
+        class_=AsyncSession, 
+        expire_on_commit=False
+    )
+else:
+    AsyncSessionLocal = None
 
 async def init_db():
     """Initialize the database by creating all tables"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if not engine:
+        print("Skipping database initialization - no engine available")
+        return
+    
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("Database tables created successfully")
+    except Exception as e:
+        print(f"Failed to initialize database: {e}")
+        raise
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get database session"""
+    if not AsyncSessionLocal:
+        raise RuntimeError("Database not available")
+    
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -52,4 +80,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def close_db():
     """Close database connections"""
-    await engine.dispose()
+    if engine:
+        await engine.dispose()
+        print("Database connections closed")
