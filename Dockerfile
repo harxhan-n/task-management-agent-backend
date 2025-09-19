@@ -26,9 +26,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Convert line endings and make startup script executable
-RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
-
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
