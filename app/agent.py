@@ -22,14 +22,20 @@ class ConversationContext:
     def __init__(self, max_history: int = 10):
         self.messages: List[Dict[str, Any]] = []
         self.max_history = max_history
+        self.last_task_mentioned = None  # Track the most recent task for context updates
     
-    def add_message(self, role: str, content: str):
+    def add_message(self, role: str, content: str, task_info: Dict = None):
         """Add a message to conversation history"""
         self.messages.append({
             "role": role,
             "content": content,
-            "timestamp": "now"
+            "timestamp": "now",
+            "task_info": task_info
         })
+        
+        # Update last mentioned task if provided
+        if task_info and "title" in task_info:
+            self.last_task_mentioned = task_info
         
         # Keep only recent messages to avoid token limits
         if len(self.messages) > self.max_history:
@@ -90,7 +96,13 @@ class TaskManagementAgent:
     
     def _get_system_instructions(self) -> str:
         """Get comprehensive system instructions for the agent"""
-        return """You are a professional Task Management Assistant powered by LangGraph and Google Gemini.
+        
+        # Include context about the last mentioned task
+        last_task_context = ""
+        if self.context.last_task_mentioned:
+            last_task_context = f"\n\nCONTEXT - LAST MENTIONED TASK:\nTitle: {self.context.last_task_mentioned.get('title', 'Unknown')}\nID: {self.context.last_task_mentioned.get('id', 'Unknown')}\nStatus: {self.context.last_task_mentioned.get('status', 'Unknown')}\n"
+        
+        return f"""You are a professional Task Management Assistant powered by LangGraph and Google Gemini.{last_task_context}
 
 CORE RESPONSIBILITIES:
 • Help users create, update, delete, list, and filter tasks efficiently
@@ -177,6 +189,15 @@ INTERACTION PATTERNS:
 • "From those..." → Reference previous context + appropriate tool
 • "Is there any..." → Check against previous context if relevant
 
+CRITICAL CONTEXT AWARENESS RULES:
+• "Add description/Add the description" → ALWAYS UPDATE existing task, never create new one
+• "Set priority/Add priority" → ALWAYS UPDATE existing task, never create new one
+• "Add due date/Set due date" → ALWAYS UPDATE existing task, never create new one
+• When user says "add X" without "task" keyword → UPDATE the most recently mentioned task
+• When user says "add task X" → CREATE new task
+• If unclear which task to update, ask for clarification or show task list
+• NEVER create duplicate tasks when user wants to enhance existing ones
+
 BULK OPERATIONS INTELLIGENCE:
 • "Delete all", "Remove all", "Clear all tasks" → Use multiple delete_task_tool calls
 • "Mark all as done", "Complete all tasks" → Use multiple update_task_tool calls  
@@ -239,8 +260,11 @@ Remember: You're helping users stay organized and productive. Always be encourag
             # Clean up response message - remove raw data formatting
             response_message = self._clean_agent_response(response_message)
             
-            # Add assistant response to context
-            self.context.add_message("assistant", response_message)
+            # Extract task information from agent results for context tracking
+            task_info = await self._extract_task_from_result(result)
+            
+            # Add assistant response to context with task info
+            self.context.add_message("assistant", response_message, task_info)
             
             # Extract task updates for WebSocket notifications
             task_updates = []
@@ -310,6 +334,40 @@ Remember: You're helping users stay organized and productive. Always be encourag
             response = "I've processed your request successfully!"
         
         return response
+
+    async def _extract_task_from_result(self, agent_result: Dict) -> Dict:
+        """Extract task information from agent results for context tracking"""
+        import json
+        import re
+        
+        try:
+            if "messages" in agent_result:
+                for message in agent_result["messages"]:
+                    if hasattr(message, 'content') and isinstance(message.content, str):
+                        # Try to parse JSON from tool results
+                        json_matches = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', message.content)
+                        
+                        for json_str in json_matches:
+                            try:
+                                tool_result = json.loads(json_str)
+                                
+                                # Look for task in results
+                                if "task" in tool_result and isinstance(tool_result["task"], dict):
+                                    task = tool_result["task"]
+                                    return {
+                                        "id": task.get("id"),
+                                        "title": task.get("title"),
+                                        "status": task.get("status"),
+                                        "priority": task.get("priority")
+                                    }
+                                    
+                            except json.JSONDecodeError:
+                                continue
+                                
+        except Exception:
+            pass
+            
+        return None
 
     async def _extract_display_data(self, user_message: str, response_message: str, agent_result: Dict) -> List[Dict]:
         """Extract structured data for frontend display from agent results"""
