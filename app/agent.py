@@ -236,6 +236,9 @@ Remember: You're helping users stay organized and productive. Always be encourag
             # Extract response
             response_message = result["messages"][-1].content if result["messages"] else "I processed your request."
             
+            # Clean up response message - remove raw data formatting
+            response_message = self._clean_agent_response(response_message)
+            
             # Add assistant response to context
             self.context.add_message("assistant", response_message)
             
@@ -275,6 +278,38 @@ Remember: You're helping users stay organized and productive. Always be encourag
                 "success": False,
                 "context_length": len(self.context.messages)
             }
+
+    def _clean_agent_response(self, response: str) -> str:
+        """Clean up agent response by removing raw data formatting and improving readability"""
+        import re
+        
+        # Remove bullet points with IDs like "• ••ID: 1••"
+        response = re.sub(r'•\s*••ID:\s*\d+••', '', response)
+        
+        # Clean up raw field listings like "Title: string. Status: pending."
+        response = re.sub(r'Title:\s*string\.?\s*', '', response)
+        response = re.sub(r'Description:\s*string\.?\s*', '', response)
+        
+        # Replace technical status terms with user-friendly language
+        response = re.sub(r'Status:\s*pending', 'Status: To Do', response)
+        response = re.sub(r'Status:\s*in_progress', 'Status: In Progress', response)
+        response = re.sub(r'Status:\s*done', 'Status: Completed', response)
+        
+        # Clean up priority formatting
+        response = re.sub(r'Priority:\s*low', 'Priority: Low', response)
+        response = re.sub(r'Priority:\s*medium', 'Priority: Medium', response)
+        response = re.sub(r'Priority:\s*high', 'Priority: High', response)
+        
+        # Remove excessive dots and clean up formatting
+        response = re.sub(r'\.{2,}', '.', response)
+        response = re.sub(r'\s+', ' ', response)
+        response = response.strip()
+        
+        # If response is still very technical or empty, provide a friendly fallback
+        if len(response) < 10 or 'string' in response.lower() or not response:
+            response = "I've processed your request successfully!"
+        
+        return response
 
     async def _extract_display_data(self, user_message: str, response_message: str, agent_result: Dict) -> List[Dict]:
         """Extract structured data for frontend display from agent results"""
