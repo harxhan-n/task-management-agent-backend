@@ -47,23 +47,37 @@ print(f"Railway ENV: {os.getenv('RAILWAY_ENVIRONMENT', 'NOT SET')}")
 print("=" * 50)
 
 # CORS configuration
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-print(f"CORS origins: {allowed_origins}")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+print(f"CORS origins from env: {allowed_origins}")
 
-# Handle different formats
+# Handle different formats and ensure localhost and Railway domains are included
 if allowed_origins == "*":
     cors_origins = ["*"]
 else:
     cors_origins = allowed_origins.split(",")
 
-print(f"Processed CORS origins: {cors_origins}")
+# Always add common development and production origins if not using wildcard
+if "*" not in cors_origins:
+    common_origins = [
+        "http://localhost:3000",
+        "https://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://task-management-agent-frontend.up.railway.app",
+        "https://task-management-agent-frontend-production.up.railway.app"
+    ]
+    for origin in common_origins:
+        if origin not in cors_origins:
+            cors_origins.append(origin)
+
+print(f"Final CORS origins: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Request logging middleware
@@ -104,8 +118,16 @@ async def root():
         "status": "running",
         "docs": "/docs",
         "health": "/health",
-        "timestamp": "2025-09-19"
+        "timestamp": "2025-09-19",
+        "cors_enabled": True
     }
+
+
+@app.options("/{full_path:path}")
+async def preflight_handler():
+    """Handle CORS preflight requests"""
+    print("CORS preflight request received")
+    return {"message": "OK"}
 
 
 @app.get("/health")
@@ -114,7 +136,8 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "task-management-api",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "cors_enabled": True
     }
 
 
