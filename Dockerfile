@@ -37,9 +37,5 @@ USER appuser
 # Expose port (Railway uses PORT environment variable)
 EXPOSE 8000
 
-# Health check (Railway uses dynamic PORT)
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
-
 # Command to run the application (Railway will use PORT env var)
 CMD ["./start.sh"]
