@@ -57,6 +57,14 @@ async def root():
     }
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "task-management-api",
+        "version": "1.0.0"
+    }
 
 
 @app.get("/api/info")
