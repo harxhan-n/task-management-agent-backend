@@ -25,10 +25,10 @@ python-dateutil>=2.8.0
 # HTTP client for health checks
 httpx>=0.25.0
 
-# LangChain and LangGraph (as per requirements)
-langchain-core>=0.1.0
-langchain-google-genai>=0.1.0
-langgraph>=0.1.0
+# LangChain and LangGraph (pinned to compatible versions)
+langchain-core>=0.2.0
+langchain-google-genai>=1.0.0
+langgraph>=0.2.0
 
 # Testing (optional)
 pytest>=7.4.0

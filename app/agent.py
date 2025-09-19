@@ -82,6 +82,7 @@ class TaskManagementAgent:
     
     def _create_langgraph_agent(self):
         """Create LangGraph agent with tools as per requirements"""
+        # Use the simple create_react_agent API (compatible with current LangGraph versions)
         return create_react_agent(
             model=self.llm,
             tools=self.tools
