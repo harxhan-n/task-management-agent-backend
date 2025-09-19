@@ -28,20 +28,8 @@ else:
     
     if is_railway:
         print("Railway environment detected - using Railway PostgreSQL optimizations")
-        # Railway's internal PostgreSQL doesn't need SSL mode for internal connections
-        if "sslmode=" not in DATABASE_URL:
-            if "?" in DATABASE_URL:
-                DATABASE_URL += "&sslmode=prefer"
-            else:
-                DATABASE_URL += "?sslmode=prefer"
     else:
-        # For external databases like Supabase, require SSL
-        if "sslmode=" not in DATABASE_URL:
-            if "?" in DATABASE_URL:
-                DATABASE_URL += "&sslmode=require"
-            else:
-                DATABASE_URL += "?sslmode=require"
-            print("Added SSL mode requirement for external database")
+        print("External database detected - will configure SSL in connect_args")
 
 print(f"Final DATABASE_URL: {DATABASE_URL[:50]}...")
 
@@ -53,6 +41,14 @@ try:
             "application_name": "railway_taskmanager",
         }
     }
+    
+    # Configure SSL properly for asyncpg
+    if is_railway:
+        # Railway internal connections prefer SSL but don't require it
+        connect_args["ssl"] = "prefer"
+    else:
+        # External databases like Supabase require SSL
+        connect_args["ssl"] = "require"
     
     # Adjust pool settings based on environment
     if is_railway:
