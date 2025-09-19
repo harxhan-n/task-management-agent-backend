@@ -22,34 +22,65 @@ else:
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
         print("Fixed DATABASE_URL to use asyncpg driver")
     
-    # Ensure SSL is properly configured for containerized environments
-    if "sslmode=" not in DATABASE_URL:
-        if "?" in DATABASE_URL:
-            DATABASE_URL += "&sslmode=require"
-        else:
-            DATABASE_URL += "?sslmode=require"
-        print("Added SSL mode requirement to DATABASE_URL")
+    # Railway PostgreSQL typically doesn't need SSL enforcement
+    # but we'll detect Railway environment and adjust accordingly
+    is_railway = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    
+    if is_railway:
+        print("Railway environment detected - using Railway PostgreSQL optimizations")
+        # Railway's internal PostgreSQL doesn't need SSL mode for internal connections
+        if "sslmode=" not in DATABASE_URL:
+            if "?" in DATABASE_URL:
+                DATABASE_URL += "&sslmode=prefer"
+            else:
+                DATABASE_URL += "?sslmode=prefer"
+    else:
+        # For external databases like Supabase, require SSL
+        if "sslmode=" not in DATABASE_URL:
+            if "?" in DATABASE_URL:
+                DATABASE_URL += "&sslmode=require"
+            else:
+                DATABASE_URL += "?sslmode=require"
+            print("Added SSL mode requirement for external database")
 
 print(f"Final DATABASE_URL: {DATABASE_URL[:50]}...")
 
-# Create async engine with better error handling and Railway compatibility
+# Create async engine optimized for Railway PostgreSQL
 try:
-    # Connection arguments for better Railway <-> Supabase connectivity
+    # Connection arguments optimized for Railway
     connect_args = {
         "server_settings": {
             "application_name": "railway_taskmanager",
         }
     }
     
+    # Adjust pool settings based on environment
+    if is_railway:
+        # Railway PostgreSQL can handle more connections
+        pool_settings = {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_timeout": 30,
+            "pool_recycle": 3600,  # 1 hour
+        }
+        print("Using Railway PostgreSQL pool settings")
+    else:
+        # Conservative settings for external databases
+        pool_settings = {
+            "pool_size": 5,
+            "max_overflow": 10,
+            "pool_timeout": 20,
+            "pool_recycle": 300,  # 5 minutes
+        }
+        print("Using external database pool settings")
+    
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,  # Reduce logging in production
         future=True,
         pool_pre_ping=True,  # Verify connections before use
-        pool_recycle=300,    # Recycle connections every 5 minutes
-        pool_timeout=20,     # Wait time for getting connection from pool
-        max_overflow=10,     # Additional connections beyond pool size
-        connect_args=connect_args
+        connect_args=connect_args,
+        **pool_settings
     )
     print("Database engine created successfully with Railway optimizations")
 except Exception as e:
