@@ -8,14 +8,26 @@ from .models import Base
 # Load environment variables
 load_dotenv()
 
-# Database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/taskdb")
+# Database URL from environment with debugging
+DATABASE_URL = os.getenv("DATABASE_URL")
+print(f"Database URL loaded: {DATABASE_URL is not None}")
+
+if not DATABASE_URL:
+    print("Warning: DATABASE_URL not found, using default")
+    DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/taskdb"
+else:
+    # Ensure the URL has the correct async driver
+    if DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+        print("Fixed DATABASE_URL to use asyncpg driver")
 
 # Create async engine
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,  # Set to False in production
-    future=True
+    echo=False,  # Reduce logging in production
+    future=True,
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=300,    # Recycle connections every 5 minutes
 )
 
 # Create async session factory
