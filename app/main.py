@@ -38,29 +38,50 @@ app = FastAPI(
 )
 
 # CORS configuration
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+print(f"CORS origins: {allowed_origins}")
+
+# Handle different formats
+if allowed_origins == "*":
+    cors_origins = ["*"]
+else:
+    cors_origins = allowed_origins.split(",")
+
+print(f"Processed CORS origins: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(tasks.router, prefix="/api")
-app.include_router(chat.router, prefix="/api")
+try:
+    app.include_router(tasks.router, prefix="/api")
+    print("Tasks router included successfully")
+except Exception as e:
+    print(f"Error including tasks router: {e}")
+
+try:
+    app.include_router(chat.router, prefix="/api")
+    print("Chat router included successfully")
+except Exception as e:
+    print(f"Error including chat router: {e}")
 
 
 @app.get("/")
 async def root():
     """Root endpoint"""
+    print("Root endpoint accessed")
     return {
         "message": "Task Management API",
         "version": "1.0.0",
+        "status": "running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "timestamp": "2025-09-19"
     }
 
 
