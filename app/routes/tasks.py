@@ -28,8 +28,16 @@ async def get_tasks(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all tasks with pagination"""
-    tasks = await crud.get_tasks(db, skip=skip, limit=limit)
-    return [TaskResponse.model_validate(task) for task in tasks]
+    try:
+        tasks = await crud.get_tasks(db, skip=skip, limit=limit)
+        return [TaskResponse.model_validate(task) for task in tasks]
+    except Exception as e:
+        # Handle database connection errors gracefully
+        print(f"Database error in get_tasks: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail="Database temporarily unavailable. Please try again later."
+        )
 
 
 @router.get("/filter", response_model=List[TaskResponse])
@@ -68,8 +76,15 @@ async def filter_tasks(
         due_after=parsed_due_after
     )
     
-    tasks = await crud.get_tasks(db, skip=skip, limit=limit, task_filter=task_filter)
-    return [TaskResponse.model_validate(task) for task in tasks]
+    try:
+        tasks = await crud.get_tasks(db, skip=skip, limit=limit, task_filter=task_filter)
+        return [TaskResponse.model_validate(task) for task in tasks]
+    except Exception as e:
+        print(f"Database error in filter_tasks: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail="Database temporarily unavailable. Please try again later."
+        )
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
