@@ -26,8 +26,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Make startup script executable
-RUN chmod +x start.sh
+# Convert line endings and make startup script executable
+RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser && \
@@ -38,4 +38,4 @@ USER appuser
 EXPOSE 8000
 
 # Command to run the application (Railway will use PORT env var)
-CMD ["./start.sh"]
+CMD python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
