@@ -31,8 +31,8 @@ RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (Railway uses PORT environment variable)
-EXPOSE 8000
+# Expose port (Railway typically uses 8080)
+EXPOSE 8080
 
-# Command to run the application (Railway will use PORT env var)
-CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Command to run the application (use fixed port 8080)
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

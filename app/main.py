@@ -37,6 +37,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Print startup info
+print("=" * 50)
+print("FASTAPI APP CONFIGURATION")
+print(f"Title: {app.title}")
+print(f"Version: {app.version}")
+print(f"PORT env var: {os.getenv('PORT', 'NOT SET')}")
+print(f"Railway ENV: {os.getenv('RAILWAY_ENVIRONMENT', 'NOT SET')}")
+print("=" * 50)
+
 # CORS configuration
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 print(f"CORS origins: {allowed_origins}")
@@ -60,9 +69,15 @@ app.add_middleware(
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request, call_next):
-    print(f"Incoming request: {request.method} {request.url}")
+    print(f"=== INCOMING REQUEST ===")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Client: {request.client}")
     response = await call_next(request)
-    print(f"Response status: {response.status_code}")
+    print(f"=== RESPONSE ===")
+    print(f"Status: {response.status_code}")
+    print(f"========================")
     return response
 
 # Include routers
