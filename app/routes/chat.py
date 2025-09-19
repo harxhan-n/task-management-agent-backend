@@ -158,20 +158,38 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 agent = get_agent(session_id)
                 result = await agent.process_message(user_message)
                 
+                # Get updated tasks to broadcast
+                from .. import crud
+                from ..db import AsyncSessionLocal
+                
+                async with AsyncSessionLocal() as db:
+                    all_tasks = await crud.get_tasks(db, limit=100)
+                    tasks_data = []
+                    for task in all_tasks:
+                        tasks_data.append({
+                            "id": task.id,
+                            "title": task.title,
+                            "description": task.description,
+                            "status": task.status,
+                            "priority": task.priority,
+                            "due_date": task.due_date.isoformat() if task.due_date else None,
+                            "created_at": task.created_at.isoformat() if task.created_at else None,
+                            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+                        })
+                    
+                    # Broadcast updated tasks to all task listeners
+                    await manager.broadcast_task_updates(tasks_data)
+                
                 # Send response back to client
                 response_message = {
                     "type": "chat_response",
                     "data": {
                         "response": result["response"],
-                        "task_updates": result.get("task_updates", [])
+                        "task_updates": tasks_data
                     }
                 }
                 
                 await websocket.send_text(json.dumps(response_message))
-                
-                # Broadcast task updates to all task listeners
-                if result.get("task_updates"):
-                    await manager.broadcast_task_updates(result["task_updates"])
                 
             except json.JSONDecodeError:
                 await websocket.send_text(json.dumps({
