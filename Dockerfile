@@ -35,4 +35,4 @@ USER appuser
 EXPOSE 8000
 
 # Command to run the application (Railway will use PORT env var)
-CMD python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
