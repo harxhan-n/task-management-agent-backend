@@ -21,6 +21,14 @@ else:
     if DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
         print("Fixed DATABASE_URL to use asyncpg driver")
+    
+    # Ensure SSL is properly configured for containerized environments
+    if "sslmode=" not in DATABASE_URL:
+        if "?" in DATABASE_URL:
+            DATABASE_URL += "&sslmode=require"
+        else:
+            DATABASE_URL += "?sslmode=require"
+        print("Added SSL mode requirement to DATABASE_URL")
 
 print(f"Final DATABASE_URL: {DATABASE_URL[:50]}...")
 
@@ -30,12 +38,7 @@ try:
     connect_args = {
         "server_settings": {
             "application_name": "railway_taskmanager",
-        },
-        # Add SSL configuration for Supabase
-        "ssl": "require",
-        # Connection timeout settings
-        "command_timeout": 30,
-        "connect_timeout": 10,
+        }
     }
     
     engine = create_async_engine(
