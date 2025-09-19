@@ -1,10 +1,8 @@
 import os
-from typing import Dict, Any, List, Annotated
+from typing import Dict, Any, List
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
 from dotenv import load_dotenv
 from .tools import (
     create_task_tool,
@@ -16,11 +14,6 @@ from .tools import (
 
 # Load environment variables
 load_dotenv()
-
-
-class AgentState(TypedDict):
-    """State for the LangGraph agent"""
-    messages: Annotated[List[HumanMessage | AIMessage | SystemMessage], add_messages]
 
 
 class ConversationContext:
@@ -88,77 +81,12 @@ class TaskManagementAgent:
         )
     
     def _create_langgraph_agent(self):
-        """Create LangGraph agent manually to avoid input_schema issues"""
-        # Bind tools to the LLM
-        llm_with_tools = self.llm.bind_tools(self.tools)
-        
-        def agent_node(state: AgentState):
-            """Main agent reasoning node"""
-            # Add system message if not present
-            messages = state["messages"]
-            if not messages or not isinstance(messages[0], SystemMessage):
-                system_msg = SystemMessage(content=self._get_system_instructions())
-                messages = [system_msg] + messages
-            
-            response = llm_with_tools.invoke(messages)
-            return {"messages": [response]}
-        
-        def should_continue(state: AgentState):
-            """Decide whether to continue or end"""
-            last_message = state["messages"][-1]
-            if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-                return "tools"
-            return END
-        
-        def tool_node(state: AgentState):
-            """Execute tools"""
-            last_message = state["messages"][-1]
-            tool_responses = []
-            
-            if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-                for tool_call in last_message.tool_calls:
-                    tool_name = tool_call["name"]
-                    tool_args = tool_call["args"]
-                    
-                    # Find and execute the tool
-                    for tool in self.tools:
-                        if tool.name == tool_name:
-                            try:
-                                if hasattr(tool, 'func'):
-                                    result = tool.func(**tool_args)
-                                else:
-                                    result = tool(**tool_args)
-                                tool_responses.append(AIMessage(content=str(result)))
-                            except Exception as e:
-                                tool_responses.append(AIMessage(content=f"Error: {str(e)}"))
-                            break
-            
-            return {"messages": tool_responses}
-        
-        # Build the graph
-        workflow = StateGraph(AgentState)
-        
-        # Add nodes
-        workflow.add_node("agent", agent_node)
-        workflow.add_node("tools", tool_node)
-        
-        # Set entry point
-        workflow.set_entry_point("agent")
-        
-        # Add conditional edges
-        workflow.add_conditional_edges(
-            "agent",
-            should_continue,
-            {
-                "tools": "tools",
-                END: END
-            }
+        """Create LangGraph agent with tools as per requirements"""
+        # Use the simple create_react_agent API (compatible with current LangGraph versions)
+        return create_react_agent(
+            model=self.llm,
+            tools=self.tools
         )
-        
-        # Add edge from tools back to agent
-        workflow.add_edge("tools", "agent")
-        
-        return workflow.compile()
     
     def _get_system_instructions(self) -> str:
         """Get comprehensive system instructions for the agent"""
@@ -294,31 +222,43 @@ Remember: You're helping users stay organized and productive. Always be encourag
             self.context.add_message("user", user_message)
             
             # Build messages with context
+            messages = [SystemMessage(content=self._get_system_instructions())]
+            
+            # Add conversation history for context
             context_messages = self.context.get_context_messages()
+            messages.extend(context_messages)
             
-            # Create the initial state
-            initial_state = {
-                "messages": context_messages + [HumanMessage(content=user_message)]
-            }
+            # Process with LangGraph agent
+            result = await self.agent.ainvoke({
+                "messages": messages
+            })
             
-            # Run the agent
-            result = await self.agent.ainvoke(initial_state)
-            
-            # Extract response from the last AI message
-            response_message = "I processed your request."
-            for msg in reversed(result["messages"]):
-                if isinstance(msg, AIMessage) and not hasattr(msg, 'tool_calls'):
-                    response_message = msg.content
-                    break
+            # Extract response
+            response_message = result["messages"][-1].content if result["messages"] else "I processed your request."
             
             # Add assistant response to context
             self.context.add_message("assistant", response_message)
             
+            # Extract task updates for WebSocket notifications
+            task_updates = []
+            
+            # Extract structured data for frontend display
+            data_to_show = await self._extract_display_data(user_message, response_message, result)
+            
+            # Extract display format from data_to_show if present
+            data_format = None
+            if data_to_show:
+                # Get the display format from the first item (assuming all items have the same format)
+                data_format = data_to_show[0].get("display_format")
+                # Remove display_format from individual items since it's now at the top level
+                for item in data_to_show:
+                    item.pop("display_format", None)
+            
             return {
                 "response": response_message,
-                "task_updates": [],
-                "data_to_show": [],
-                "data_format": None,
+                "task_updates": task_updates,
+                "data_to_show": data_to_show,
+                "data_format": data_format,
                 "success": True,
                 "context_length": len(self.context.messages)
             }
